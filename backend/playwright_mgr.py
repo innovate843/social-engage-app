@@ -48,8 +48,19 @@ class PlaywrightManager:
         """Convert browser DevTools cookie export to Playwright storage state and save."""
         session_file = os.path.join(SESSION_DIR, f"{platform}.json")
 
+        same_site_map = {
+            "no_restriction": "None",
+            "lax": "Lax",
+            "strict": "Strict",
+            "none": "None",
+            "unspecified": "Lax",
+            "": "Lax",
+        }
+
         playwright_cookies = []
         for c in cookies:
+            raw_same_site = (c.get("sameSite") or "").lower()
+            same_site = same_site_map.get(raw_same_site, "Lax")
             playwright_cookies.append({
                 "name": c.get("name", ""),
                 "value": c.get("value", ""),
@@ -58,7 +69,7 @@ class PlaywrightManager:
                 "expires": float(c.get("expirationDate", -1)),
                 "httpOnly": bool(c.get("httpOnly", False)),
                 "secure": bool(c.get("secure", False)),
-                "sameSite": c.get("sameSite") or "Lax",
+                "sameSite": same_site,
             })
 
         with open(session_file, "w") as f:
