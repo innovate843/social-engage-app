@@ -29,53 +29,57 @@ async def _scan_facebook(ctx: BrowserContext, max_posts: int) -> list[dict]:
             await page.evaluate("window.scrollBy(0, 800)")
             await page.wait_for_timeout(900)
 
-        post_elements = await page.query_selector_all('[data-pagelet^="FeedUnit"]')
-        if not post_elements:
-            post_elements = await page.query_selector_all('[role="article"]')
-        print(f"[feed/facebook] found {len(post_elements)} post elements")
-
-        for el in post_elements[:max_posts]:
+        # Use post links as anchors — more stable than pagelet selectors
+        post_links = await page.query_selector_all(
+            'a[href*="/posts/"], a[href*="story_fbid"], a[href*="?story_fbid"]'
+        )
+        print(f"[feed/facebook] found {len(post_links)} post links")
+        seen_hrefs = set()
+        for link_el in post_links[:max_posts * 3]:
             try:
-                # Author: try several selector patterns
-                author_el = await el.query_selector(
-                    "h2 a, h3 a, strong a, "
-                    "[data-ad-comet-preview='actor'] a, "
-                    "a[role='link'][tabindex='0'] span"
-                )
-                # Content: prefer message preview, fall back to any auto-direction block
-                content_el = await el.query_selector('[data-ad-comet-preview="message"]')
-                if not content_el:
-                    # get all dir=auto spans and pick the longest
-                    candidates = await el.query_selector_all('[dir="auto"]')
-                    best = None
-                    best_len = 0
-                    for c in candidates:
-                        t = (await c.inner_text()).strip()
-                        if len(t) > best_len:
-                            best_len = len(t)
-                            best = c
-                    content_el = best
+                href = await link_el.get_attribute("href")
+                if not href or href in seen_hrefs:
+                    continue
+                seen_hrefs.add(href)
 
-                link_el = await el.query_selector('a[href*="/posts/"], a[href*="story_fbid"]')
+                # Walk up to find the feed story container
+                article = await page.evaluate_handle(
+                    "(el) => el.closest('[role=\"article\"]') || el.closest('[data-pagelet]')",
+                    link_el
+                )
+                if not article:
+                    continue
+
+                # Author: h2 or h3 link text
+                author_el = await article.query_selector("h2 a, h3 a, strong a")
+                # Content: longest dir=auto text block
+                candidates = await article.query_selector_all('[dir="auto"]')
+                best = None
+                best_len = 0
+                for c in candidates:
+                    t = (await c.inner_text()).strip()
+                    if 10 < len(t) < 2000 and len(t) > best_len:
+                        best_len = len(t)
+                        best = c
 
                 if not author_el:
                     print(f"[feed/facebook] skipping: no author_el")
                     continue
-                if not content_el:
-                    print(f"[feed/facebook] skipping: no content_el")
+                if not best:
+                    print(f"[feed/facebook] skipping: no content")
                     continue
 
-                content = (await content_el.inner_text()).strip()
                 author = (await author_el.inner_text()).strip()
-                if len(content) < 10 or not author:
-                    continue
+                content = (await best.inner_text()).strip()
 
                 posts.append({
                     "target_name": author,
                     "post_content": content[:500],
-                    "post_url": await link_el.get_attribute("href") if link_el else None,
+                    "post_url": href,
                     "target_profile_url": None,
                 })
+                if len(posts) >= max_posts:
+                    break
             except Exception as ex:
                 print(f"[feed/facebook] item error: {ex}")
                 continue
@@ -98,47 +102,56 @@ async def _scan_instagram(ctx: BrowserContext, max_posts: int) -> list[dict]:
             await page.evaluate("window.scrollBy(0, 600)")
             await page.wait_for_timeout(1000)
 
-        articles = await page.query_selector_all("article")
-        print(f"[feed/instagram] found {len(articles)} articles")
-        for el in articles[:max_posts]:
+        # Use post/reel links as anchors — stories won't have these
+        post_links = await page.query_selector_all("a[href*='/p/'], a[href*='/reel/']")
+        print(f"[feed/instagram] found {len(post_links)} post links")
+        seen_hrefs = set()
+        for link_el in post_links[:max_posts * 2]:
             try:
-                # Author username
-                author_el = await el.query_selector("header a[href]")
-                # Caption — try the post caption span
-                caption_el = await el.query_selector(
-                    "div[class*='_a9zs'] span, "
-                    "ul li span[class], "
-                    "div > span > span"
-                )
-                if not caption_el:
-                    spans = await el.query_selector_all("span")
-                    best = None
-                    best_len = 0
-                    for s in spans:
-                        t = (await s.inner_text()).strip()
-                        if len(t) > best_len:
-                            best_len = len(t)
-                            best = s
-                    caption_el = best
+                href = await link_el.get_attribute("href")
+                if not href or href in seen_hrefs:
+                    continue
+                seen_hrefs.add(href)
 
-                link_el = await el.query_selector("a[href*='/p/'], a[href*='/reel/']")
+                # Walk up to the article container
+                article = await page.evaluate_handle(
+                    "(el) => el.closest('article')", link_el
+                )
+                if not article:
+                    continue
+
+                # Author: first profile link inside the article (before the post link)
+                author_links = await article.query_selector_all("a[href^='/'][href$='/']")
+                author_el = author_links[0] if author_links else None
+
+                # Caption: largest text block in the article
+                spans = await article.query_selector_all("li span, div > span")
+                best = None
+                best_len = 0
+                for s in spans:
+                    t = (await s.inner_text()).strip()
+                    if len(t) > best_len and len(t) < 2000:
+                        best_len = len(t)
+                        best = s
 
                 if not author_el:
                     print(f"[feed/instagram] skipping: no author_el")
                     continue
 
-                author = (await author_el.inner_text()).strip()
-                content = (await caption_el.inner_text()).strip() if caption_el else ""
+                author = (await author_el.inner_text()).strip().rstrip("/")
+                content = (await best.inner_text()).strip() if best else ""
                 if not content or len(content) < 5:
+                    print(f"[feed/instagram] skipping: no caption")
                     continue
 
-                href = await link_el.get_attribute("href") if link_el else None
                 posts.append({
                     "target_name": author,
                     "post_content": content[:500],
-                    "post_url": f"https://www.instagram.com{href}" if href else None,
+                    "post_url": f"https://www.instagram.com{href}",
                     "target_profile_url": f"https://www.instagram.com/{author}/",
                 })
+                if len(posts) >= max_posts:
+                    break
             except Exception as ex:
                 print(f"[feed/instagram] item error: {ex}")
                 continue
