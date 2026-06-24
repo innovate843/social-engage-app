@@ -94,6 +94,42 @@ async def post_reply(ctx: BrowserContext, item: dict):
         await page.close()
 
 
+async def do_unfollow(ctx: BrowserContext, item: dict):
+    """Click Unfollow on a profile."""
+    platform = item["platform"]
+    profile_url = item.get("target_profile_url")
+    if not profile_url:
+        raise Exception("No profile URL provided for unfollow")
+
+    page = await ctx.new_page()
+    try:
+        await page.goto(profile_url, wait_until="domcontentloaded", timeout=30000)
+        await page.wait_for_timeout(2000)
+
+        selectors = {
+            "facebook": '[aria-label="Following"], button:has-text("Following")',
+            "instagram": 'button:has-text("Following")',
+            "linkedin": 'button:has-text("Following")',
+            "twitter": '[data-testid*="unfollow"], button:has-text("Following")',
+        }
+        sel = selectors.get(platform, 'button:has-text("Following")')
+        btn = await page.query_selector(sel)
+        if not btn:
+            raise Exception(f"Could not find Following button on {platform}")
+
+        await btn.click()
+        await page.wait_for_timeout(1500)
+
+        confirm = await page.query_selector(
+            'button:has-text("Unfollow"), [data-testid="confirmationSheetConfirm"]'
+        )
+        if confirm:
+            await confirm.click()
+            await page.wait_for_timeout(1500)
+    finally:
+        await page.close()
+
+
 async def do_follow(ctx: BrowserContext, item: dict):
     """Click the Follow button on a profile."""
     platform = item["platform"]

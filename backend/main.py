@@ -11,7 +11,7 @@ from playwright_mgr import PlaywrightManager
 from ai_drafter import draft_birthday_message, draft_reply
 from scanners.birthday import scan_birthdays
 from scanners.feed import scan_feed
-from actions.post import post_birthday, post_reply, do_follow
+from actions.post import post_birthday, post_reply, do_follow, do_unfollow
 
 db = Database()
 pw = PlaywrightManager()
@@ -59,6 +59,23 @@ class BirthdayAddRequest(BaseModel):
 class ScanFeedRequest(BaseModel):
     platforms: Optional[list[str]] = None
 
+class HashtagDiscoverRequest(BaseModel):
+    platform: str
+    hashtag: str
+    max_results: int = 20
+
+class AudienceDiscoverRequest(BaseModel):
+    platform: str
+    profile_url: str
+    source: str = "followers"
+    max_results: int = 30
+
+class FollowbackRequest(BaseModel):
+    platforms: list[str] = ["twitter", "instagram"]
+
+class UnfollowCandidatesRequest(BaseModel):
+    days: int = 30
+
 
 # ── Queue ─────────────────────────────────────────────────────────────────────
 
@@ -104,6 +121,8 @@ async def post_item(item_id: int):
         await post_reply(ctx, item)
     elif item["type"] == "follow":
         await do_follow(ctx, item)
+    elif item["type"] == "unfollow":
+        await do_unfollow(ctx, item)
     else:
         raise HTTPException(status_code=400, detail=f"Unknown type: {item['type']}")
 
@@ -179,6 +198,76 @@ async def trigger_feed_scan(body: ScanFeedRequest = None):
             await db.add_queue_item({**post, "type": "reply", "platform": platform, "draft_message": draft})
             total += 1
     return {"added": total}
+
+
+# ── Grow / Discovery ──────────────────────────────────────────────────────────
+
+@app.post("/discover/hashtag")
+async def discover_hashtag(body: HashtagDiscoverRequest):
+    from scanners.hashtag import scan_hashtag
+    ctx = await pw.get_context(body.platform)
+    profiles = await scan_hashtag(ctx, body.platform, body.hashtag, body.max_results)
+    added = 0
+    for p in profiles:
+        await db.add_queue_item({
+            "type": "follow",
+            "platform": body.platform,
+            "target_name": p["target_name"],
+            "target_profile_url": p["target_profile_url"],
+            "draft_message": f"Follow {p['target_name']}",
+        })
+        added += 1
+    return {"added": added}
+
+@app.post("/discover/audience")
+async def discover_audience(body: AudienceDiscoverRequest):
+    from scanners.audience import scan_audience
+    ctx = await pw.get_context(body.platform)
+    profiles = await scan_audience(ctx, body.platform, body.profile_url, body.source, body.max_results)
+    added = 0
+    for p in profiles:
+        await db.add_queue_item({
+            "type": "follow",
+            "platform": body.platform,
+            "target_name": p["target_name"],
+            "target_profile_url": p["target_profile_url"],
+            "draft_message": f"Follow {p['target_name']}",
+        })
+        added += 1
+    return {"added": added}
+
+@app.post("/discover/followback")
+async def discover_followback(body: FollowbackRequest):
+    from scanners.new_followers import scan_new_followers
+    total = 0
+    for platform in body.platforms:
+        ctx = await pw.get_context(platform)
+        profiles = await scan_new_followers(ctx, platform)
+        for p in profiles:
+            await db.add_queue_item({
+                "type": "follow",
+                "platform": platform,
+                "target_name": p["target_name"],
+                "target_profile_url": p["target_profile_url"],
+                "draft_message": f"Follow back {p['target_name']}",
+            })
+            total += 1
+    return {"added": total}
+
+@app.post("/discover/unfollow")
+async def discover_unfollow(body: UnfollowCandidatesRequest):
+    candidates = await db.get_old_follows(body.days)
+    added = 0
+    for c in candidates:
+        await db.add_queue_item({
+            "type": "unfollow",
+            "platform": c["platform"],
+            "target_name": c["target_name"],
+            "target_profile_url": c["target_profile_url"],
+            "draft_message": f"Unfollow {c['target_name']}",
+        })
+        added += 1
+    return {"added": added}
 
 
 # ── Manual adds ───────────────────────────────────────────────────────────────

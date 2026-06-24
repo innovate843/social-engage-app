@@ -13,7 +13,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export type QueueStatus = "pending" | "approved" | "posted" | "rejected";
-export type QueueType = "birthday" | "reply" | "follow";
+export type QueueType = "birthday" | "reply" | "follow" | "unfollow";
 
 export interface QueueItem {
   id: number;
@@ -64,6 +64,16 @@ export const api = {
   scanBirthdays: () => req("/scan/birthdays", { method: "POST" }),
   scanFeed: (platforms?: string[]) =>
     req("/scan/feed", { method: "POST", body: JSON.stringify({ platforms }) }),
+
+  // Grow / Discovery
+  discoverHashtag: (platform: string, hashtag: string, max_results = 20) =>
+    req<{ added: number }>("/discover/hashtag", { method: "POST", body: JSON.stringify({ platform, hashtag, max_results }) }),
+  discoverAudience: (platform: string, profile_url: string, source: string, max_results = 30) =>
+    req<{ added: number }>("/discover/audience", { method: "POST", body: JSON.stringify({ platform, profile_url, source, max_results }) }),
+  discoverFollowback: (platforms: string[]) =>
+    req<{ added: number }>("/discover/followback", { method: "POST", body: JSON.stringify({ platforms }) }),
+  discoverUnfollow: (days: number) =>
+    req<{ added: number }>("/discover/unfollow", { method: "POST", body: JSON.stringify({ days }) }),
 
   // Manual adds
   addFollow: (platform: string, name: string, profile_url: string) =>

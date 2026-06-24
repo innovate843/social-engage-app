@@ -17,6 +17,7 @@ const TYPE_FILTERS: { label: string; value: QueueType | "" }[] = [
   { label: "Birthdays", value: "birthday" },
   { label: "Replies", value: "reply" },
   { label: "Follows", value: "follow" },
+  { label: "Unfollow", value: "unfollow" },
 ];
 
 export default function DashboardPage() {
@@ -98,9 +99,10 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-gray-50">
       <nav className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
         <h1 className="font-bold text-gray-900 text-lg">Social Engage</h1>
-        <Link href="/settings" className="text-sm text-gray-500 hover:text-gray-800">
-          Settings
-        </Link>
+        <div className="flex gap-4">
+          <Link href="/grow" className="text-sm text-gray-500 hover:text-gray-800">Grow</Link>
+          <Link href="/settings" className="text-sm text-gray-500 hover:text-gray-800">Settings</Link>
+        </div>
       </nav>
 
       <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">

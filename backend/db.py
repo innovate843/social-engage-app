@@ -152,6 +152,17 @@ class Database:
             ) as cursor:
                 return [dict(r) for r in await cursor.fetchall()]
 
+    async def get_old_follows(self, days: int):
+        async with aiosqlite.connect(DB_PATH) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                """SELECT * FROM queue
+                   WHERE type = 'follow' AND status = 'posted'
+                   AND posted_at <= datetime('now', ? || ' days')""",
+                (f"-{days}",),
+            ) as cursor:
+                return [dict(r) for r in await cursor.fetchall()]
+
     async def mark_birthday_wished(self, birthday_id: int, year: int):
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute(
