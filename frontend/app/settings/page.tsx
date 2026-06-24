@@ -54,13 +54,15 @@ export default function SettingsPage() {
   const [cookieText, setCookieText] = useState("");
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
+  const [loadError, setLoadError] = useState("");
 
   const load = async () => {
     try {
       const p = await api.getPlatforms();
       setPlatforms(p);
-    } catch {
-      // ignore
+      setLoadError("");
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -110,6 +112,12 @@ export default function SettingsPage() {
             except your session — no passwords.
           </p>
         </div>
+
+        {loadError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-700 font-mono break-all">
+            API error: {loadError}
+          </div>
+        )}
 
         <div className="space-y-3">
           {platforms.map((p) => {
