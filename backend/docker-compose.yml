@@ -6,7 +6,7 @@ services:
     container_name: social-engage
     restart: unless-stopped
     ports:
-      - "8096:8096"
+      - "8097:8096"
     env_file:
       - .env
     volumes:

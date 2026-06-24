@@ -9,6 +9,6 @@ COPY . .
 
 RUN mkdir -p sessions
 
-EXPOSE 8096
+EXPOSE 8097
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8096"]
