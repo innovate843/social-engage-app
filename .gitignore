@@ -1,0 +1,15 @@
+# Backend
+backend/__pycache__/
+backend/*.pyc
+backend/engage.db
+backend/sessions/
+backend/.env
+
+# Frontend
+frontend/.next/
+frontend/node_modules/
+frontend/.env.local
+
+# General
+.DS_Store
+*.log
