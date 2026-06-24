@@ -22,16 +22,22 @@ async def _scan_facebook(ctx: BrowserContext, max_posts: int) -> list[dict]:
     page = await ctx.new_page()
     posts = []
     try:
-        await page.goto("https://www.facebook.com", wait_until="networkidle", timeout=30000)
-        await page.wait_for_timeout(2000)
+        await page.goto("https://www.facebook.com", wait_until="domcontentloaded", timeout=30000)
+        await page.wait_for_timeout(3000)
+        print(f"[feed/facebook] landed on: {page.url}")
         for _ in range(3):
             await page.evaluate("window.scrollBy(0, 800)")
             await page.wait_for_timeout(900)
 
+        # Try multiple selector strategies
         post_elements = await page.query_selector_all('[data-pagelet^="FeedUnit"]')
+        if not post_elements:
+            post_elements = await page.query_selector_all('[role="article"]')
+        print(f"[feed/facebook] found {len(post_elements)} post elements")
+
         for el in post_elements[:max_posts]:
             try:
-                author_el = await el.query_selector("h2 a, h3 a, strong a")
+                author_el = await el.query_selector("h2 a, h3 a, strong a, [data-ad-comet-preview='actor'] a")
                 content_el = await el.query_selector('[data-ad-comet-preview="message"], [dir="auto"]')
                 link_el = await el.query_selector('a[href*="/posts/"], a[href*="story_fbid"]')
                 if not (author_el and content_el):
@@ -47,6 +53,7 @@ async def _scan_facebook(ctx: BrowserContext, max_posts: int) -> list[dict]:
                 })
             except Exception:
                 continue
+        print(f"[feed/facebook] extracted {len(posts)} posts")
     except Exception as e:
         print(f"[feed/facebook] error: {e}")
     finally:
@@ -58,13 +65,16 @@ async def _scan_instagram(ctx: BrowserContext, max_posts: int) -> list[dict]:
     page = await ctx.new_page()
     posts = []
     try:
-        await page.goto("https://www.instagram.com", wait_until="networkidle", timeout=30000)
+        await page.goto("https://www.instagram.com", wait_until="domcontentloaded", timeout=30000)
         await page.wait_for_timeout(3000)
+        print(f"[feed/instagram] landed on: {page.url}")
         for _ in range(2):
             await page.evaluate("window.scrollBy(0, 600)")
             await page.wait_for_timeout(1000)
 
-        for el in (await page.query_selector_all("article"))[:max_posts]:
+        articles = await page.query_selector_all("article")
+        print(f"[feed/instagram] found {len(articles)} articles")
+        for el in articles[:max_posts]:
             try:
                 author_el = await el.query_selector("header a")
                 caption_el = await el.query_selector("div > span")
@@ -95,13 +105,16 @@ async def _scan_linkedin(ctx: BrowserContext, max_posts: int) -> list[dict]:
     page = await ctx.new_page()
     posts = []
     try:
-        await page.goto("https://www.linkedin.com/feed/", wait_until="networkidle", timeout=30000)
-        await page.wait_for_timeout(2000)
+        await page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded", timeout=30000)
+        await page.wait_for_timeout(3000)
+        print(f"[feed/linkedin] landed on: {page.url}")
         for _ in range(2):
             await page.evaluate("window.scrollBy(0, 700)")
             await page.wait_for_timeout(800)
 
-        for el in (await page.query_selector_all(".feed-shared-update-v2"))[:max_posts]:
+        elements = await page.query_selector_all(".feed-shared-update-v2, .occludable-update")
+        print(f"[feed/linkedin] found {len(elements)} post elements")
+        for el in elements[:max_posts]:
             try:
                 author_el = await el.query_selector(
                     ".update-components-actor__name, .feed-shared-actor__name"
@@ -136,13 +149,16 @@ async def _scan_twitter(ctx: BrowserContext, max_posts: int) -> list[dict]:
     page = await ctx.new_page()
     posts = []
     try:
-        await page.goto("https://x.com/home", wait_until="networkidle", timeout=30000)
-        await page.wait_for_timeout(2000)
+        await page.goto("https://x.com/home", wait_until="domcontentloaded", timeout=30000)
+        await page.wait_for_timeout(3000)
+        print(f"[feed/twitter] landed on: {page.url}")
         for _ in range(2):
             await page.evaluate("window.scrollBy(0, 700)")
             await page.wait_for_timeout(800)
 
-        for el in (await page.query_selector_all('[data-testid="tweet"]'))[:max_posts]:
+        tweets = await page.query_selector_all('[data-testid="tweet"]')
+        print(f"[feed/twitter] found {len(tweets)} tweets")
+        for el in tweets[:max_posts]:
             try:
                 author_el = await el.query_selector('[data-testid="User-Name"] a')
                 content_el = await el.query_selector('[data-testid="tweetText"]')
