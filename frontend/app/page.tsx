@@ -23,6 +23,7 @@ export default function DashboardPage() {
   const [items, setItems] = useState<QueueItem[]>([]);
   const [status, setStatus] = useState<QueueStatus>("pending");
   const [typeFilter, setTypeFilter] = useState<QueueType | "">("");
+  const [platformFilter, setPlatformFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [scanMsg, setScanMsg] = useState("");
@@ -76,6 +77,22 @@ export default function DashboardPage() {
   };
 
   const byType = (t: QueueType) => items.filter((i) => i.type === t).length;
+  const visibleItems = platformFilter ? items.filter((i) => i.platform === platformFilter) : items;
+
+  const PLATFORM_FILTERS = [
+    { label: "All", value: "" },
+    { label: "FB", value: "facebook" },
+    { label: "IG", value: "instagram" },
+    { label: "LI", value: "linkedin" },
+    { label: "X", value: "twitter" },
+  ];
+
+  const PLATFORM_COLORS: Record<string, string> = {
+    facebook: "bg-blue-600",
+    instagram: "bg-pink-600",
+    linkedin: "bg-sky-700",
+    twitter: "bg-black",
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -130,26 +147,43 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        <div className="flex gap-2 flex-wrap">
-          {TYPE_FILTERS.map((f) => (
-            <button key={f.value} onClick={() => setTypeFilter(f.value)}
-              className={`text-xs px-3 py-1 rounded-full border transition-colors ${
-                typeFilter === f.value
-                  ? "bg-gray-800 text-white border-gray-800"
-                  : "text-gray-600 border-gray-300 hover:bg-gray-50"
-              }`}>
-              {f.label}
-            </button>
-          ))}
+        <div className="flex gap-2 flex-wrap items-center">
+          <div className="flex gap-1.5 flex-wrap">
+            {TYPE_FILTERS.map((f) => (
+              <button key={f.value} onClick={() => setTypeFilter(f.value)}
+                className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+                  typeFilter === f.value
+                    ? "bg-gray-800 text-white border-gray-800"
+                    : "text-gray-600 border-gray-300 hover:bg-gray-50"
+                }`}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+          <div className="w-px h-4 bg-gray-300" />
+          <div className="flex gap-1.5 flex-wrap">
+            {PLATFORM_FILTERS.map((f) => (
+              <button key={f.value} onClick={() => setPlatformFilter(f.value)}
+                className={`text-xs px-3 py-1 rounded-full border font-medium transition-colors ${
+                  platformFilter === f.value
+                    ? f.value
+                      ? `${PLATFORM_COLORS[f.value]} text-white border-transparent`
+                      : "bg-gray-800 text-white border-gray-800"
+                    : "text-gray-600 border-gray-300 hover:bg-gray-50"
+                }`}>
+                {f.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {loading ? (
           <p className="text-sm text-gray-400 text-center py-10">Loading...</p>
-        ) : items.length === 0 ? (
+        ) : visibleItems.length === 0 ? (
           <p className="text-sm text-gray-400 text-center py-10">No items in this queue.</p>
         ) : (
           <div className="space-y-3">
-            {items.map((item) => <QueueCard key={item.id} item={item} onUpdate={load} />)}
+            {visibleItems.map((item) => <QueueCard key={item.id} item={item} onUpdate={load} />)}
           </div>
         )}
       </div>

@@ -3,6 +3,27 @@
 import { useState } from "react";
 import { api, QueueItem } from "@/lib/api";
 
+function ExpandablePost({ content }: { content: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const LIMIT = 200;
+  const long = content.length > LIMIT;
+  return (
+    <div className="text-xs text-gray-600 bg-gray-50 border-l-2 border-gray-300 pl-3 py-2 rounded-r">
+      <p className="italic whitespace-pre-wrap">
+        {expanded || !long ? content : content.slice(0, LIMIT) + "…"}
+      </p>
+      {long && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="mt-1 text-blue-500 hover:underline not-italic"
+        >
+          {expanded ? "Show less" : "Show more"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 const PLATFORM_COLORS: Record<string, string> = {
   facebook: "bg-blue-600",
   instagram: "bg-pink-600",
@@ -77,9 +98,7 @@ export default function QueueCard({ item, onUpdate }: Props) {
 
       {/* Original post (reply type) */}
       {item.post_content && (
-        <div className="text-xs text-gray-500 bg-gray-50 border-l-2 border-gray-300 pl-3 py-1 italic line-clamp-3">
-          {item.post_content}
-        </div>
+        <ExpandablePost content={item.post_content} />
       )}
 
       {/* Draft message */}
